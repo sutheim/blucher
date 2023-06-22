@@ -10,8 +10,6 @@ use {defmt_rtt as _, panic_probe as _};
 async fn main(spawner: Spawner) {
     let p = embassy_rp::init(Default::default());
 
-    spawner
-        .spawn(motor_control(p.PIN_4, p.PWM_CH2, p.PIN_2, p.PIN_3))
-        .unwrap();
+    spawner.spawn(motor_control(p.PIN_4, p.PWM_CH2, p.PIN_2, p.PIN_3)).unwrap();
 }
 
