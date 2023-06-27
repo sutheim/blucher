@@ -2,7 +2,8 @@
 #![no_main]
 #![feature(type_alias_impl_trait)]
 
-use common::motor_control::motor_control;
+use common::{thruster::Thruster, thruster_system::thruster_system};
+use defmt::unwrap;
 use embassy_executor::Spawner;
 use {defmt_rtt as _, panic_probe as _};
 
@@ -10,6 +11,9 @@ use {defmt_rtt as _, panic_probe as _};
 async fn main(spawner: Spawner) {
     let p = embassy_rp::init(Default::default());
 
-    spawner.spawn(motor_control(p.PIN_4, p.PWM_CH2, p.PIN_2, p.PIN_3)).unwrap();
+    let send_spawner = spawner.make_send();
+
+    let thruster = Thruster::new(p.PIN_4, p.PWM_CH2, p.PIN_2.into(), p.PIN_3.into());
+    unwrap!(spawner.spawn(thruster_system(send_spawner, thruster)));
 }
 

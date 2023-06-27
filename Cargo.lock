@@ -108,7 +108,9 @@ dependencies = [
  "defmt-rtt",
  "embassy-executor",
  "embassy-rp",
+ "embassy-sync",
  "embassy-time",
+ "half",
  "panic-probe",
 ]
 
