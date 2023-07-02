@@ -77,8 +77,6 @@ impl Thruster {
     pub fn tick_thruster(&mut self, delta_t_micros: u64) {
         let dt = TryInto::<u32>::try_into(delta_t_micros).unwrap() as f32 / 100_000f32;
 
-        debug!("Current drive: {}", self.current_drive.to_f32());
-
         if self.current_drive > f16::from_f32_const(-0.01f32) && self.current_drive < f16::from_f32_const(0.01f32) {
             if self.target_drive > f16::from_f32_const(0f32) {
                 self.current_drive = f16::from_f32_const(0.25);
@@ -97,8 +95,6 @@ impl Thruster {
             1.5f32,
             dt,
         ));
-
-        debug!("New drive diff: {}, using delta {}", (self.current_drive - old).to_f32(), dt);
 
         self.set_motor_speed_according_to_drive();
     }
