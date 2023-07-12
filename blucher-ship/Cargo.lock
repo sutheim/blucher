@@ -260,14 +260,12 @@ dependencies = [
  "atomic-polyfill 0.1.11",
  "cortex-m",
  "cortex-m-rt",
- "defmt",
  "embassy-futures",
  "embassy-net-driver-channel",
  "embassy-sync",
  "embassy-time",
  "embedded-hal 1.0.0-alpha.10",
  "futures",
- "log",
  "num_enum",
 ]
 
