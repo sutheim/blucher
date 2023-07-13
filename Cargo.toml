@@ -1,7 +1,8 @@
 [workspace]
-
 resolver = "2"
-
 members = [
-  "blucher-ship"
+  "blucher-ship",
+  "blucher-controller",
+  "blucher-core",
+  "blucher-data",
 ]

@@ -1,8 +1,17 @@
 #![no_std]
 #![no_main]
 #![feature(type_alias_impl_trait)]
+#![feature(async_fn_in_trait)]
+#![allow(incomplete_features)]
+#![allow(dead_code)]
 
-use common::{wifi_system::wifi_system, locomotion_system::locomotion_system, thruster::Thruster};
+pub mod locomotion_system;
+pub mod thruster;
+pub mod radio;
+pub mod wifi_system;
+
+use crate::{wifi_system::wifi_system, locomotion_system::locomotion_system, thruster::Thruster, radio::handle_radio_task};
+use blucher_core::radio_system::radio_system;
 use defmt::unwrap;
 use embassy_executor::Spawner;
 use {defmt_rtt as _, panic_probe as _};

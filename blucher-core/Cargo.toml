@@ -1,7 +1,7 @@
 cargo-features = ["per-package-target"]
 
 [package]
-name = "blucher-ship"
+name = "blucher-core"
 version = "0.1.0"
 edition = "2021"
 forced-target = "thumbv6m-none-eabi"
@@ -27,5 +27,3 @@ static_cell = { version = "1.1", features = ["nightly"]}
 cyw43-pio = { path = "../cyw43-pio", features = ["defmt", "overclock"] }
 cyw43 = { version = "0.1.0", path = "../cyw43" }
 half = { version = "2.2.0", default_features = false, features = [] }
-
-blucher-core = { path = "../blucher-core" }

@@ -11,7 +11,7 @@ use embassy_time::{Duration, Instant, Timer};
 
 use {defmt_rtt as _, panic_probe as _};
 
-use crate::util::smooth_damp;
+use blucher_core::util::smooth_damp;
 
 const THRUSTER_TICK_INTERVAL: u8 = 50;
 const EPSILON: f32 = 0.01;
