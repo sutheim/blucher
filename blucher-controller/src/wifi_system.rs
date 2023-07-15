@@ -2,7 +2,7 @@ use core::str::from_utf8;
 
 use cyw43_pio::PioSpi;
 use defmt::*;
-use embassy_executor::{Spawner, SendSpawner};
+use embassy_executor::Spawner;
 use embassy_net::tcp::TcpSocket;
 use embassy_net::{Config, Stack, StackResources};
 use embassy_rp::gpio::{Level, Output};

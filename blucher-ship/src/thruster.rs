@@ -6,7 +6,7 @@ use embassy_rp::{
 use half::f16;
 
 use defmt::debug;
-use embassy_sync::{blocking_mutex::raw::ThreadModeRawMutex, mutex::Mutex, signal::Signal};
+use embassy_sync::{blocking_mutex::raw::ThreadModeRawMutex, signal::Signal};
 use embassy_time::{Duration, Instant, Timer};
 
 use {defmt_rtt as _, panic_probe as _};
@@ -85,8 +85,6 @@ impl Thruster {
                 self.current_drive = f16::from_f32_const(-0.25);
             }
         }
-
-        let old = self.current_drive;
 
         self.current_drive = f16::from_f32(smooth_damp(
             self.current_drive.into(),

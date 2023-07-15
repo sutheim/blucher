@@ -28,4 +28,8 @@ cyw43-pio = { path = "../cyw43-pio", features = ["defmt", "overclock"] }
 cyw43 = { version = "0.1.0", path = "../cyw43" }
 half = { version = "2.2.0", default_features = false, features = [] }
 
+bincode = {version="2.0.0-rc.3", default_features = false, features = ["bincode_derive", "derive"]}
+
 blucher-core = { path = "../blucher-core" }
+blucher-data = { path = "../blucher-data" }
+

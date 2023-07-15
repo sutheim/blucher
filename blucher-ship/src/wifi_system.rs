@@ -1,25 +1,30 @@
-use core::str::from_utf8;
+use bincode::{config, decode_from_slice};
+use blucher_data::commands::Command;
 
+use blucher_data::wifi::{TCP_ADDRESS, TCP_BUFFER_SIZE, TCP_PORT};
 use cyw43_pio::PioSpi;
 use defmt::*;
-use embassy_executor::{Spawner, SendSpawner};
+
+use embassy_executor::Spawner;
+use embassy_futures::select::select;
 use embassy_net::tcp::TcpSocket;
 use embassy_net::{Config, Stack, StackResources};
 use embassy_rp::gpio::{Level, Output};
-use embassy_rp::peripherals::{DMA_CH0, PIN_23, PIN_25, PIO0, PIN_29, PIN_24};
+use embassy_rp::peripherals::{DMA_CH0, PIN_23, PIN_24, PIN_25, PIN_29, PIO0};
 use embassy_rp::pio::Pio;
+use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex;
+use embassy_sync::channel::Sender;
 use embassy_time::Duration;
-use embedded_io::asynch::Write;
 use static_cell::make_static;
 use {defmt_rtt as _, panic_probe as _};
 
-  
-const SSID: &str = "ship";
-const PASSPHRASE: &str = "blucher2023";
-
 #[embassy_executor::task]
 async fn wifi_task(
-    runner: cyw43::Runner<'static, Output<'static, PIN_23>, PioSpi<'static, PIN_25, PIO0, 0, DMA_CH0>>,
+    runner: cyw43::Runner<
+        'static,
+        Output<'static, PIN_23>,
+        PioSpi<'static, PIN_25, PIO0, 0, DMA_CH0>,
+    >,
 ) -> ! {
     runner.run().await
 }
@@ -30,17 +35,19 @@ async fn net_task(stack: &'static Stack<cyw43::NetDriver<'static>>) -> ! {
 }
 
 #[embassy_executor::task]
-pub async fn wifi_system (
+pub async fn wifi_system(
     spawner: Spawner,
+    ssid: &'static str,
+    pass: &'static str,
     pwr_pin: PIN_23,
     cs_pin: PIN_25,
     pio_pin: PIO0,
     dio_pin: PIN_24,
     clk_pin: PIN_29,
-    dma_pin: DMA_CH0
-    ){
-    info!("Hello World!");
-
+    dma_pin: DMA_CH0,
+    command_channel: Sender<'static, ThreadModeRawMutex, Command, 8>,
+) {
+    info!("Initializing wifi system");
 
     let fw = include_bytes!("../../cyw43-firmware/43439A0.bin");
     let clm = include_bytes!("../../cyw43-firmware/43439A0_clm.bin");
@@ -55,7 +62,15 @@ pub async fn wifi_system (
     let pwr = Output::new(pwr_pin, Level::Low);
     let cs = Output::new(cs_pin, Level::High);
     let mut pio = Pio::new(pio_pin);
-    let spi = PioSpi::new(&mut pio.common, pio.sm0, pio.irq0, cs, dio_pin, clk_pin, dma_pin);
+    let spi = PioSpi::new(
+        &mut pio.common,
+        pio.sm0,
+        pio.irq0,
+        cs,
+        dio_pin,
+        clk_pin,
+        dma_pin,
+    );
 
     let state = make_static!(cyw43::State::new());
     let (net_device, mut control, runner) = cyw43::new(state, pwr, spi, fw).await;
@@ -69,7 +84,15 @@ pub async fn wifi_system (
     // let config = Config::dhcpv4(Default::default());
     // Use a link-local address for communication without DHCP server
     let config = Config::ipv4_static(embassy_net::StaticConfigV4 {
-        address: embassy_net::Ipv4Cidr::new(embassy_net::Ipv4Address::new(169, 254, 1, 1), 16),
+        address: embassy_net::Ipv4Cidr::new(
+            embassy_net::Ipv4Address::new(
+                TCP_ADDRESS[0],
+                TCP_ADDRESS[1],
+                TCP_ADDRESS[2],
+                TCP_ADDRESS[3],
+            ),
+            16,
+        ),
         dns_servers: heapless::Vec::new(),
         gateway: None,
     });
@@ -87,29 +110,19 @@ pub async fn wifi_system (
 
     unwrap!(spawner.spawn(net_task(stack)));
 
-    control.start_ap_wpa2(SSID, PASSPHRASE, 5).await;
+    control.start_ap_wpa2(ssid, pass, 5).await;
 
-    // loop {
-    //     //control.join_open(env!("WIFI_NETWORK")).await;
-    //     match control.join_wpa2(SSID, PASSPHRASE).await {
-    //         Ok(_) => break,
-    //         Err(err) => {
-    //             info!("join failed with status={}", err.status);
-    //         }
-    //     }
-    // }
-
-    let mut rx_buffer = [0; 4096];
-    let mut tx_buffer = [0; 4096];
-    let mut buf = [0; 4096];
+    let mut rx_buffer = [0; TCP_BUFFER_SIZE];
+    let mut tx_buffer = [0; TCP_BUFFER_SIZE];
+    let mut buf = [0; TCP_BUFFER_SIZE];
 
     loop {
         let mut socket = TcpSocket::new(stack, &mut rx_buffer, &mut tx_buffer);
         socket.set_timeout(Some(Duration::from_secs(10)));
 
         control.gpio_set(0, false).await;
-        info!("Listening on TCP:1234...");
-        if let Err(e) = socket.accept(1234).await {
+        info!("Listening on TCP:{}", TCP_PORT);
+        if let Err(e) = socket.accept(TCP_PORT).await {
             warn!("accept error: {:?}", e);
             continue;
         }
@@ -117,28 +130,90 @@ pub async fn wifi_system (
         info!("Received connection from {:?}", socket.remote_endpoint());
         control.gpio_set(0, true).await;
 
-        loop {
-            let n = match socket.read(&mut buf).await {
-                Ok(0) => {
-                    warn!("read EOF");
-                    break;
-                }
-                Ok(n) => n,
-                Err(e) => {
-                    warn!("read error: {:?}", e);
-                    break;
-                }
-            };
+        let (mut reader, mut writer) = socket.split();
 
-            info!("rxd {}", from_utf8(&buf[..n]).unwrap());
+        // let incoming_task = handle_incoming_messages(reader);
+        let incoming_task = async {
+            loop {
+                let lenght = match reader.read(&mut buf).await {
+                    Ok(0) => {
+                        warn!("EOF reached over TCP, disconnecting");
+                        break;
+                    }
+                    Ok(lenght) => lenght,
+                    Err(err) => {
+                        error!("Error reading data over TCP: {:?}, disconnecting", err);
+                        break;
+                    }
+                };
 
-            match socket.write_all(&buf[..n]).await {
-                Ok(()) => {}
-                Err(e) => {
-                    warn!("write error: {:?}", e);
-                    break;
-                }
-            };
-        }
+                debug!("Received {} bytes over TCP", lenght);
+
+                let Ok( (decoded, _) ) = decode_from_slice::<Command, _>(&buf[..lenght], config::standard()) else {
+                    error!("Error decoding message received over TCP.");
+                    continue;
+                };
+
+                debug!("Received message over TCP: {}", decoded);
+
+                match command_channel.try_send(decoded) {
+                    Ok(()) => {
+                        debug!("Command is being processed");
+                        break;
+                    },
+                    Err(_) => {
+                        error!("Error passing command to command queue, command lost");
+                    },
+                };
+            }
+        };
+
+        let outgoing_task = async {
+            let buf = [0; TCP_BUFFER_SIZE];
+            loop {
+                let length = match writer.write(&buf).await {
+                    Ok(length) => length,
+                    Err(err) => {
+                        error!("Error writing data over TCP: {:?}, disconnecting", err);
+                        break;
+                    }
+                };
+
+                debug!("Sent {} bytes over TCP", length);
+            }
+        };
+
+        select(incoming_task, outgoing_task).await;
+
+        info!("TCP Connection closed");
+
+        // loop {
+        //     let n = match socket.read(&mut buf).await {
+        //         Ok(0) => {
+        //             warn!("EOF reached over TCP");
+        //             break;
+        //         }
+        //         Ok(n) => n,
+        //         Err(e) => {
+        //             error!("Error reading data over TCP: {:?}", e);
+        //             break;
+        //         }
+        //     };
+        //
+        //     let Ok( (decoded, length) ) = decode_from_slice::<Command, _>(&buf[..n], config::standard()) else {
+        //         error!("Error decoding message received over TCP.");
+        //         break;
+        //     };
+        //
+        //     debug!("Received {} bytes over TCP", length);
+        //
+        //     match socket.write_all(&buf[..n]).await {
+        //         Ok(()) => {}
+        //         Err(e) => {
+        //             warn!("write error: {:?}", e);
+        //             break;
+        //         }
+        //     };
+        // }
     }
 }
