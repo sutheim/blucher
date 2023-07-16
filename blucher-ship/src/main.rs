@@ -17,7 +17,7 @@ use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex;
 use embassy_sync::channel::Channel;
 
 use crate::{
-    locomotion_system::locomotion_system, thruster::Thruster,
+    // locomotion_system::locomotion_system, thruster::Thruster,
     wifi_system::wifi_system,
 };
 
@@ -46,8 +46,8 @@ async fn main(spawner: Spawner) {
         COMMAND_CHANNEL.sender(),
     )));
 
-    let thruster = Thruster::new(p.PIN_4, p.PWM_CH2, p.PIN_2.into(), p.PIN_3.into());
-    unwrap!(spawner.spawn(locomotion_system(spawner, thruster)));
+    // let thruster = Thruster::new(p.PIN_4, p.PWM_CH2, p.PIN_2.into(), p.PIN_3.into());
+    // unwrap!(spawner.spawn(locomotion_system(spawner, thruster)));
 }
 
 

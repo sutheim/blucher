@@ -2,6 +2,7 @@ use bincode::{ Decode, Encode };
 
 #[derive(Encode, Decode)]
 pub enum Command {
+    Heartbeat,
     SetThrust {
         thrust: f32,
     },
